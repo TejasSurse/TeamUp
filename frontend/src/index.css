@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@theme {
+  --color-turf-light: #ff4d4d;
+  --color-turf: #d32f2f;
+  --color-turf-dark: #b71c1c;
+
+  --color-primary: #d32f2f;
+  --color-primary-light: #ff6659;
+  --color-primary-dark: #9a0007;
+}
+
+body {
+  background-color: #fce4ec;
+  color: #212121;
+}
+
+/* Custom Loading Animation */
+.loader-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #fff;
+}
+
+.loader-orbit {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  animation: rotate 2s linear infinite;
+}
+
+.ball {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 20px;
+  background-color: #ff5252;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(255, 82, 82, 0.5);
+}
+
+.football {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 24px;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Glassmorphism for Bottom Nav */
+.glass-nav {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
+}
