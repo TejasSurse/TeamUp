@@ -1,11 +1,4 @@
 {
-    "name": "teamup-monorepo",
-    "private": true,
-    "engines": {
-        "node": "20.x"
-    },
-    "workspaces": [
-        "frontend",
-        "backend"
-    ]
+    "name": "teamup-project",
+    "private": true
 }
