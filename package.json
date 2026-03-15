@@ -2,13 +2,10 @@
     "name": "teamup-monorepo",
     "private": true,
     "engines": {
-        "node": "22.x"
+        "node": "20.x"
     },
     "workspaces": [
         "frontend",
         "backend"
-    ],
-    "scripts": {
-        "build:frontend": "npm run build -w frontend"
-    }
+    ]
 }
