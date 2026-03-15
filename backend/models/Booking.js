@@ -9,16 +9,6 @@ const bookingSchema = new mongoose.Schema({
     totalPrice: { type: Number, required: true },
     numberOfPlayers: { type: Number, required: true, default: 1 },
     splitCostPerPlayer: { type: Number, required: true },
-    paymentMethod: {
-        type: String,
-        enum: ['FakeOnline', 'Offline'],
-        required: true
-    },
-    paymentStatus: {
-        type: String,
-        enum: ['Pending', 'Completed', 'Failed'],
-        default: 'Pending'
-    },
     bookingStatus: {
         type: String,
         enum: ['Pending', 'Confirmed', 'Rejected', 'Cancelled'],

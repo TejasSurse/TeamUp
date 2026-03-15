@@ -19,6 +19,8 @@ const OwnerDashboard = () => {
     const [editTurf, setEditTurf] = useState(null);
     const [formData, setFormData] = useState({ name: '', description: '', address: '', city: '', pricePerHour: '', sportTypes: '', images: null });
     const [manualData, setManualData] = useState({ turfId: '', date: '', startTime: '', endTime: '', numberOfPlayers: 2 });
+    const [dailyDate, setDailyDate] = useState(new Date().toISOString().split('T')[0]);
+    const [bookedSlotsForDaily, setBookedSlotsForDaily] = useState([]);
 
     // Notification Sound
     const audioRef = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'));
@@ -59,6 +61,28 @@ const OwnerDashboard = () => {
             setBookings(newBookings);
         } catch (error) { console.error(error); }
     };
+
+    const fetchSlotsForManual = async (turfId, date) => {
+        if (!turfId || !date) return;
+        try {
+            const { data } = await api.get(`/bookings/slots/${turfId}?date=${date}`);
+            setBookedSlotsForDaily(data);
+        } catch (err) { console.error(err); }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'manual' && manualData.turfId && manualData.date) {
+            fetchSlotsForManual(manualData.turfId, manualData.date);
+        }
+    }, [manualData.turfId, manualData.date, activeTab]);
+
+    useEffect(() => {
+        if (activeTab === 'daily') {
+            // Find a default turf if none selected or just use first
+            const tId = turfs[0]?._id;
+            if (tId) fetchSlotsForManual(tId, dailyDate);
+        }
+    }, [dailyDate, activeTab, turfs]);
 
     const getFilteredBookings = () => {
         if (dateFilter === 'all') return bookings;
@@ -166,7 +190,7 @@ const OwnerDashboard = () => {
         try {
             await api.post('/bookings', {
                 turfId: manualData.turfId, date: manualData.date, startTime: String(s), endTime: String(en),
-                totalPrice, numberOfPlayers: manualData.numberOfPlayers, paymentMethod: 'Offline'
+                totalPrice, numberOfPlayers: manualData.numberOfPlayers
             }, { headers: { Authorization: `Bearer ${token}` } });
             Swal.fire({ icon: 'success', title: 'Walk-in Booked!', html: `<p>Total: ₹${totalPrice}</p>`, confirmButtonColor: '#d32f2f' });
             setManualData({ turfId: '', date: '', startTime: '', endTime: '', numberOfPlayers: 2 }); fetchData();
@@ -181,6 +205,7 @@ const OwnerDashboard = () => {
         { id: 'requests', label: 'Requests', icon: 'fa-solid fa-bell', count: pendingBookings.length },
         { id: 'turfs', label: 'My Turfs', icon: 'fa-solid fa-stadium' },
         { id: 'bookings', label: 'Bookings', icon: 'fa-solid fa-calendar-check' },
+        { id: 'daily', label: 'Daily View', icon: 'fa-solid fa-calendar-day' },
         { id: 'revenue', label: 'Revenue', icon: 'fa-solid fa-indian-rupee-sign' },
         { id: 'manual', label: 'Walk-in', icon: 'fa-solid fa-ticket' }
     ];
@@ -576,7 +601,6 @@ const OwnerDashboard = () => {
                                                     </td>
                                                     <td className="p-6">
                                                         <p className="font-black text-gray-900 text-lg">₹{b.totalPrice}</p>
-                                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{b.paymentMethod}</p>
                                                     </td>
                                                     <td className="p-6">
                                                         <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${statusBadge(b.bookingStatus)}`}>
@@ -588,6 +612,69 @@ const OwnerDashboard = () => {
                                         </tbody>
                                     </table>
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'daily' && (
+                        <div>
+                            <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                <div>
+                                    <h1 className="text-3xl md:text-4xl font-black text-gray-900">Daily Schedule</h1>
+                                    <p className="text-gray-500 mt-2 font-medium">Visual timeline of bookings for the day.</p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <input
+                                        type="date"
+                                        value={dailyDate}
+                                        onChange={(e) => setDailyDate(e.target.value)}
+                                        className="p-4 bg-white border-2 border-gray-100 rounded-2xl font-black text-gray-700 outline-none focus:border-primary shadow-sm"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-8">
+                                {turfs.map(t => (
+                                    <div key={t._id} className="bg-white rounded-[2.5rem] shadow-xl p-8 border border-gray-100">
+                                        <div className="flex items-center justify-between mb-8">
+                                            <h3 className="text-xl font-black text-gray-900 flex items-center gap-3">
+                                                <i className="fa-solid fa-stadium text-primary/30"></i>
+                                                {t.name}
+                                            </h3>
+                                        </div>
+
+                                        <div className="relative">
+                                            <div className="flex overflow-x-auto pb-6 gap-2 no-scrollbar">
+                                                {Array.from({ length: 18 }, (_, i) => i + 6).map(h => {
+                                                    const bookingsForThisTurf = bookings.filter(b => b.turf?._id === t._id && b.date === dailyDate && b.bookingStatus === 'Confirmed');
+                                                    const booking = bookingsForThisTurf.find(b => parseInt(b.startTime) <= h && parseInt(b.endTime) > h);
+
+                                                    return (
+                                                        <div key={h} className="flex-shrink-0 w-24">
+                                                            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 text-center">{h}:00</div>
+                                                            <div className={`h-24 rounded-2xl flex items-center justify-center p-2 text-center transition-all border-2
+                                                                ${booking ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' : 'bg-gray-50 text-gray-300 border-dashed border-gray-200'}`}>
+                                                                {booking ? (
+                                                                    <div className="overflow-hidden">
+                                                                        <p className="font-black text-[10px] leading-tight truncate">{booking.user?.name || 'Walk-in'}</p>
+                                                                        <p className="text-[8px] opacity-80 font-bold mt-1 uppercase tracking-tighter">#{booking._id.slice(-4)}</p>
+                                                                    </div>
+                                                                ) : (
+                                                                    <i className="fa-solid fa-plus text-xs"></i>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {turfs.length === 0 && (
+                                    <div className="bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-gray-100">
+                                        <p className="text-gray-400 font-black uppercase tracking-widest text-xs">Register a turf to see daily schedules.</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -666,6 +753,24 @@ const OwnerDashboard = () => {
                                             <i className="fa-solid fa-user-group absolute left-5 top-1/2 -translate-y-1/2 text-gray-300"></i>
                                             <input type="number" min="1" className="w-full pl-14 pr-6 py-5 bg-gray-50 border-2 border-transparent rounded-[2rem] focus:bg-white focus:border-primary outline-none transition-all font-black text-gray-700" value={manualData.numberOfPlayers} onChange={e => setManualData({ ...manualData, numberOfPlayers: Number(e.target.value) })} />
                                         </div>
+                                    </div>
+                                    <div className="md:col-span-2 space-y-4">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Live Availability Checklist</label>
+                                        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-9 gap-2">
+                                            {Array.from({ length: 18 }, (_, i) => i + 6).map(h => {
+                                                const isBooked = bookedSlotsForDaily.some(slot => h >= parseInt(slot.startTime) && h < parseInt(slot.endTime));
+                                                return (
+                                                    <div key={h} className={`text-center py-3 rounded-xl text-[10px] font-black transition-all border-2
+                                                        ${isBooked ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-green-50 text-green-600 border-green-100'}`}>
+                                                        {h}:00
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        <p className="text-[10px] text-gray-400 font-bold flex items-center gap-2">
+                                            <i className="fa-solid fa-circle-info text-primary"></i>
+                                            Green slots are available. Gray slots are already booked.
+                                        </p>
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Kickoff Time</label>

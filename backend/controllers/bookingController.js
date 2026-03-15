@@ -7,7 +7,7 @@ import User from '../models/User.js';
 // @access  Private
 export const createBooking = async (req, res) => {
     try {
-        const { turfId, date, startTime, endTime, totalPrice, numberOfPlayers, paymentMethod } = req.body;
+        const { turfId, date, startTime, endTime, totalPrice, numberOfPlayers } = req.body;
 
         const turf = await Turf.findById(turfId);
         if (!turf) return res.status(404).json({ message: 'Turf not found' });
@@ -55,8 +55,6 @@ export const createBooking = async (req, res) => {
             totalPrice,
             numberOfPlayers,
             splitCostPerPlayer,
-            paymentMethod,
-            paymentStatus: paymentMethod === 'FakeOnline' ? 'Completed' : 'Pending',
             bookingStatus: isOwnerBooking ? 'Confirmed' : 'Pending'
         });
 
@@ -147,9 +145,6 @@ export const updateBookingStatus = async (req, res) => {
         }
 
         booking.bookingStatus = req.body.status || booking.bookingStatus;
-        if (req.body.status === 'Confirmed') {
-            booking.paymentStatus = 'Completed';
-        }
         const updatedBooking = await booking.save();
         res.json(updatedBooking);
     } catch (error) {

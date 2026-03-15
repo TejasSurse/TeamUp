@@ -43,7 +43,7 @@ const TurfList = () => {
                             <input
                                 type="text"
                                 placeholder="Search by name or city..."
-                                className="w-full pl-12 pr-6 py-4 rounded-3xl text-gray-900 shadow-xl focus:ring-4 focus:ring-rose-300 outline-none transition-all placeholder:text-gray-400"
+                                className="w-full pl-12 pr-6 py-4 rounded-3xl bg-white text-gray-900 shadow-xl focus:ring-4 focus:ring-rose-300 outline-none transition-all placeholder:text-gray-400"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                             />

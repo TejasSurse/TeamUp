@@ -17,10 +17,12 @@ const TurfDetail = () => {
     const [selectedDate, setSelectedDate] = useState('');
     const [startHour, setStartHour] = useState('');
     const [endHour, setEndHour] = useState('');
-    const [players, setPlayers] = useState(2);
-    const [paymentMethod, setPaymentMethod] = useState('FakeOnline');
+    const [players, setPlayers] = useState(1);
     const [error, setError] = useState('');
     const [activeImg, setActiveImg] = useState(0);
+    const [rating, setRating] = useState(5);
+    const [comment, setComment] = useState('');
+    const [submittingReview, setSubmittingReview] = useState(false);
 
     useEffect(() => {
         const fetchTurf = async () => {
@@ -104,7 +106,7 @@ const TurfDetail = () => {
             await api.post('/bookings', {
                 turfId: turf._id, date: selectedDate,
                 startTime: String(s), endTime: String(e),
-                totalPrice: totalCost, numberOfPlayers: players, paymentMethod
+                totalPrice: totalCost, numberOfPlayers: players
             }, { headers: { Authorization: `Bearer ${token}` } });
 
             Swal.fire({
@@ -114,6 +116,28 @@ const TurfDetail = () => {
             }).then(() => navigate('/dashboard'));
         } catch (err) {
             Swal.fire({ icon: 'error', title: 'Booking Failed', text: err.response?.data?.message || 'Something went wrong.' });
+        }
+    };
+
+    const submitReview = async (e) => {
+        e.preventDefault();
+        if (!token) return navigate('/login');
+        if (!comment) return Swal.fire({ icon: 'warning', title: 'Empty Comment', text: 'Please write some feedback.' });
+
+        setSubmittingReview(true);
+        try {
+            await api.post(`/turfs/${id}/reviews`, { rating, comment }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            Swal.fire({ icon: 'success', title: 'Review Added!', text: 'Thank you for your feedback!' });
+            const { data } = await api.get(`/turfs/${id}`);
+            setTurf(data);
+            setComment('');
+            setRating(5);
+        } catch (err) {
+            Swal.fire({ icon: 'error', title: 'Denied', text: err.response?.data?.message || 'Failed to submit review.' });
+        } finally {
+            setSubmittingReview(false);
         }
     };
 
@@ -164,7 +188,7 @@ const TurfDetail = () => {
                                         <i className="fa-solid fa-bolt"></i> Instant
                                     </span>
                                     <span className="bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
-                                        <i className="fa-solid fa-star text-amber-500"></i> 4.9 (120 reviews)
+                                        <i className="fa-solid fa-star text-amber-500"></i> {turf.rating ? turf.rating.toFixed(1) : 'No'} ({turf.numReviews || 0} reviews)
                                     </span>
                                 </div>
                                 <h1 className="text-4xl md:text-5xl font-black text-gray-900 leading-tight">{turf.name}</h1>
@@ -313,7 +337,7 @@ const TurfDetail = () => {
                                         </div>
 
                                         <div>
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block ml-1">Squad Size</label>
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block ml-1">Country Calculator (Optional) - If don't know keep 1</label>
                                             <div className="relative">
                                                 <i className="fa-solid fa-users absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold"></i>
                                                 <input
@@ -337,29 +361,7 @@ const TurfDetail = () => {
                                             </div>
                                         </div>
 
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block ml-1">Payment Method</label>
-                                            <div className="grid grid-cols-1 gap-2">
-                                                <button
-                                                    onClick={() => setPaymentMethod('FakeOnline')}
-                                                    className={`p-4 rounded-2xl border-2 transition-all font-bold text-xs flex items-center justify-between ${paymentMethod === 'FakeOnline' ? 'border-primary bg-rose-50 text-primary shadow-sm' : 'border-gray-100 bg-white text-gray-500'}`}
-                                                >
-                                                    <span className="flex items-center gap-2">
-                                                        <i className="fa-solid fa-credit-card"></i> Pay Online
-                                                    </span>
-                                                    {paymentMethod === 'FakeOnline' && <i className="fa-solid fa-circle-check"></i>}
-                                                </button>
-                                                <button
-                                                    onClick={() => setPaymentMethod('Offline')}
-                                                    className={`p-4 rounded-2xl border-2 transition-all font-bold text-xs flex items-center justify-between ${paymentMethod === 'Offline' ? 'border-primary bg-rose-50 text-primary shadow-sm' : 'border-gray-100 bg-white text-gray-500'}`}
-                                                >
-                                                    <span className="flex items-center gap-2">
-                                                        <i className="fa-solid fa-hand-holding-dollar"></i> Pay at Venue
-                                                    </span>
-                                                    {paymentMethod === 'Offline' && <i className="fa-solid fa-circle-check"></i>}
-                                                </button>
-                                            </div>
-                                        </div>
+
 
                                         <button
                                             onClick={handleBooking}
@@ -379,6 +381,94 @@ const TurfDetail = () => {
                                             <i className="fa-solid fa-basket-shopping"></i>
                                         </div>
                                         <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Your session list is empty</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Reviews Section */}
+                    <div className="mt-16">
+                        <h2 className="text-3xl font-black text-gray-900 mb-8 flex items-center gap-3">
+                            <i className="fa-solid fa-comments text-primary"></i>
+                            Community Feedback
+                        </h2>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            {/* Review Form */}
+                            <div className="bg-white rounded-[2rem] shadow-xl p-8 border border-gray-100 h-fit">
+                                <h3 className="text-xl font-black text-gray-900 mb-6">Rate Your Experience</h3>
+                                {user ? (
+                                    <form onSubmit={submitReview} className="space-y-6">
+                                        <div>
+                                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Your Rating</label>
+                                            <div className="flex gap-2">
+                                                {[1, 2, 3, 4, 5].map(star => (
+                                                    <button
+                                                        key={star}
+                                                        type="button"
+                                                        onClick={() => setRating(star)}
+                                                        className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-all ${rating >= star ? 'bg-amber-100 text-amber-500' : 'bg-gray-50 text-gray-300'}`}
+                                                    >
+                                                        <i className="fa-solid fa-star"></i>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Your Feedback</label>
+                                            <textarea
+                                                value={comment}
+                                                onChange={(e) => setComment(e.target.value)}
+                                                placeholder="Tell others about your game..."
+                                                className="w-full p-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-primary outline-none transition-all font-medium text-gray-700 min-h-[120px]"
+                                            ></textarea>
+                                        </div>
+                                        <button
+                                            type="submit"
+                                            disabled={submittingReview}
+                                            className="w-full bg-gray-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-primary transition-all shadow-lg"
+                                        >
+                                            {submittingReview ? 'Submitting...' : 'Post Review'}
+                                        </button>
+                                        <p className="text-[10px] text-gray-400 font-bold text-center">Only users with past bookings can leave a review.</p>
+                                    </form>
+                                ) : (
+                                    <div className="text-center py-8">
+                                        <p className="text-gray-500 font-bold mb-4">Login to share your feedback</p>
+                                        <button onClick={() => navigate('/login')} className="bg-primary text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest">Login Now</button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Review List */}
+                            <div className="lg:col-span-2 space-y-6">
+                                {turf.reviews && turf.reviews.length > 0 ? (
+                                    turf.reviews.map((rev, idx) => (
+                                        <div key={idx} className="bg-white rounded-[2rem] shadow-sm p-8 border border-gray-50 transition-all hover:shadow-md">
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 bg-rose-50 text-primary rounded-2xl flex items-center justify-center font-black text-xl">
+                                                        {rev.name[0].toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-black text-gray-900">{rev.name}</h4>
+                                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{new Date(rev.createdAt).toLocaleDateString()}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex text-amber-500 text-xs gap-0.5">
+                                                    {[...Array(5)].map((_, i) => (
+                                                        <i key={i} className={`fa-solid fa-star ${i >= rev.rating ? 'text-gray-100' : ''}`}></i>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <p className="text-gray-600 font-medium leading-relaxed">{rev.comment}</p>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="bg-white rounded-[3rem] p-16 text-center border-2 border-dashed border-gray-100">
+                                        <i className="fa-solid fa-star-half-stroke text-5xl text-gray-100 mb-4 block"></i>
+                                        <p className="text-gray-400 font-black uppercase tracking-widest text-xs">No reviews yet. Be the first to rate!</p>
                                     </div>
                                 )}
                             </div>

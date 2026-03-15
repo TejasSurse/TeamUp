@@ -1,4 +1,5 @@
 import Turf from '../models/Turf.js';
+import Booking from '../models/Booking.js';
 
 // @desc    Fetch all active turfs (supports filtering by city/location)
 // @route   GET /api/turfs
@@ -101,6 +102,60 @@ export const getMyTurfs = async (req, res) => {
     try {
         const turfs = await Turf.find({ owner: req.user._id });
         res.json(turfs);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Create new review
+// @route   POST /api/turfs/:id/reviews
+// @access  Private (Customer)
+export const createTurfReview = async (req, res) => {
+    try {
+        const { rating, comment } = req.body;
+        const turfId = req.params.id;
+
+        const turf = await Turf.findById(turfId);
+        if (!turf) {
+            return res.status(404).json({ message: 'Turf not found' });
+        }
+
+        // Check if the user has booked this turf before (bookingStatus: 'Confirmed' or 'Completed', or just booked)
+        // Adjust the condition based on how booking status is used
+        const hasBooked = await Booking.findOne({
+            turf: turfId,
+            user: req.user._id,
+            bookingStatus: { $in: ['Confirmed', 'Pending'] } // Or maybe any non-cancelled booking is enough to let them review
+        });
+
+        if (!hasBooked) {
+            return res.status(400).json({ message: 'You can only review a turf after booking it' });
+        }
+
+        // Check if user already reviewed
+        const alreadyReviewed = turf.reviews.find(
+            (r) => r.user.toString() === req.user._id.toString()
+        );
+
+        if (alreadyReviewed) {
+            return res.status(400).json({ message: 'Turf already reviewed by you' });
+        }
+
+        const review = {
+            name: req.user.name,
+            rating: Number(rating),
+            comment,
+            user: req.user._id,
+        };
+
+        turf.reviews.push(review);
+        turf.numReviews = turf.reviews.length;
+        turf.rating =
+            turf.reviews.reduce((acc, item) => item.rating + acc, 0) /
+            turf.reviews.length;
+
+        await turf.save();
+        res.status(201).json({ message: 'Review added successfully' });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

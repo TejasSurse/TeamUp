@@ -1,5 +1,5 @@
 import express from 'express';
-import { getTurfs, getTurfById, createTurf, updateTurf, deleteTurf, getMyTurfs } from '../controllers/turfController.js';
+import { getTurfs, getTurfById, createTurf, updateTurf, deleteTurf, getMyTurfs, createTurfReview } from '../controllers/turfController.js';
 import { protect, turfOwner, admin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -9,6 +9,9 @@ router.route('/')
     .post(protect, turfOwner, createTurf);
 
 router.get('/owner/me', protect, turfOwner, getMyTurfs);
+
+router.route('/:id/reviews')
+    .post(protect, createTurfReview);
 
 router.route('/:id')
     .get(getTurfById)
