@@ -47,20 +47,26 @@ app.use((req, res, next) => {
 });
 
 // Database Connection Guard: Ensures data loads before responding
-app.use((req, res, next) => {
-    // 0: disconnected, 1: connected, 2: connecting, 3: disconnecting
-    const state = mongoose.connection.readyState;
-    
+app.use(async (req, res, next) => {
     // Skip check for health endpoint
     if (req.path === '/api/health') return next();
 
-    if (state !== 1) {
-        return res.status(503).json({ 
-            message: 'Waiting for database connection. Please try again in 5 seconds.',
-            state: state === 2 ? 'Connecting' : 'Disconnected'
+    try {
+        const state = mongoose.connection.readyState;
+        
+        // 0: disconnected, 1: connected, 2: connecting, 3: disconnecting
+        if (state !== 1) {
+            console.log(`DB not ready (state: ${state}). Attempting to connect...`);
+            await connectDB();
+        }
+        next();
+    } catch (error) {
+        console.error('Database connection guard failed:', error.message);
+        res.status(503).json({ 
+            message: 'Database connection failed. Please check your MONGO_URI or database availability.',
+            error: error.message
         });
     }
-    next();
 });
 
 // Health check (Enhanced with DB status)
