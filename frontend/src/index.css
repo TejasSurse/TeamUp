@@ -10,9 +10,23 @@
   --color-primary-dark: #9a0007;
 }
 
+/* ===== MOBILE-FIRST: No horizontal scroll, no zoom weirdness ===== */
+html {
+  overflow-x: hidden;
+  /* Smooth scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
+  /* Prevent scroll chaining / bounce on iOS */
+  overscroll-behavior-y: contain;
+}
+
 body {
   background-color: #fce4ec;
   color: #212121;
+  /* Kill any horizontal overflow that leaks */
+  overflow-x: hidden;
+  width: 100%;
+  /* Remove 300ms tap delay on mobile */
+  touch-action: manipulation;
 }
 
 /* Custom Loading Animation */

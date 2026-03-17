@@ -31,7 +31,7 @@ const TurfList = () => {
     );
 
     return (
-        <div className="min-h-screen flex flex-col bg-rose-50/20 pb-20 lg:pb-0">
+        <div className="min-h-screen flex flex-col bg-rose-50/20 pb-20 lg:pb-0 overflow-x-hidden">
             <Navbar />
             <main className="flex-grow">
                 {/* Hero Search Section */}
@@ -81,6 +81,8 @@ const TurfList = () => {
                                                     src={t.images[0]}
                                                     alt={t.name}
                                                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                                                    loading="lazy"
+                                                    decoding="async"
                                                 />
                                             ) : (
                                                 <div className="w-full h-full bg-rose-100 flex items-center justify-center text-rose-300 text-3xl">

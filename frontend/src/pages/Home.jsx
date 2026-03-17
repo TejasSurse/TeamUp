@@ -26,16 +26,19 @@ const Home = () => {
     };
 
     return (
-        <div className="min-h-screen flex flex-col bg-rose-50/20 pb-20 lg:pb-0">
+        <div className="min-h-screen flex flex-col bg-rose-50/20 pb-20 lg:pb-0 overflow-x-hidden">
             <Navbar />
 
             {/* Hero Section */}
-            <header className="relative h-[600px] flex items-center justify-center overflow-hidden">
+            <header className="relative h-[600px] flex items-center justify-center overflow-hidden max-w-full">
                 <div className="absolute inset-0 z-0">
                     <img
-                        src="https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&q=80&w=2000"
+                        src="https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&q=75&w=1200"
                         alt="Stunning Turf"
                         className="w-full h-full object-cover scale-105"
+                        loading="eager"
+                        decoding="async"
+                        fetchPriority="high"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-primary/90 via-primary/40 to-transparent"></div>
                 </div>
@@ -103,7 +106,7 @@ const Home = () => {
                         {turfs.map((t) => (
                             <div key={t._id} onClick={() => navigate(`/turfs/${t._id}`)} className="bg-white rounded-[2.5rem] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 cursor-pointer group">
                                 <div className="h-64 relative">
-                                    <img src={t.images?.[0] || "https://images.unsplash.com/photo-1529900748604-07564a03e7a6"} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={t.name} />
+                                    <img src={t.images?.[0] || "https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&q=75&w=600"} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={t.name} loading="lazy" decoding="async" />
                                     <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-2xl shadow-lg">
                                         <p className="font-black text-primary text-sm flex items-center gap-1">₹{t.pricePerHour}<span className="text-[10px] text-gray-400 font-normal">/hr</span></p>
                                     </div>

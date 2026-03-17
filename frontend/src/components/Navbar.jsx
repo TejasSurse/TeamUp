@@ -12,8 +12,8 @@ const Navbar = () => {
     };
 
     return (
-        <nav className="bg-white/90 backdrop-blur-md sticky top-0 z-50 border-b border-gray-100 h-20 flex items-center shadow-sm">
-            <div className="container mx-auto px-4 flex justify-between items-center">
+        <nav className="bg-white/90 backdrop-blur-md sticky top-0 z-50 border-b border-gray-100 h-20 flex items-center shadow-sm w-full overflow-x-hidden">
+            <div className="container mx-auto px-4 flex justify-between items-center w-full max-w-full overflow-x-hidden">
                 <Link to="/" className="flex items-center gap-2 group">
                     <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white text-xl shadow-lg rotate-12 group-hover:rotate-0 transition-transform duration-300">
                         <i className="fa-solid fa-futbol"></i>
