@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import mongoose from 'mongoose';
 import compression from 'compression';
 import connectDB from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
@@ -45,8 +46,31 @@ app.use((req, res, next) => {
     next();
 });
 
-// Health check (for uptime monitors like UptimeRobot - keeps free server alive)
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', ts: Date.now() }));
+// Database Connection Guard: Ensures data loads before responding
+app.use((req, res, next) => {
+    // 0: disconnected, 1: connected, 2: connecting, 3: disconnecting
+    const state = mongoose.connection.readyState;
+    
+    // Skip check for health endpoint
+    if (req.path === '/api/health') return next();
+
+    if (state !== 1) {
+        return res.status(503).json({ 
+            message: 'Waiting for database connection. Please try again in 5 seconds.',
+            state: state === 2 ? 'Connecting' : 'Disconnected'
+        });
+    }
+    next();
+});
+
+// Health check (Enhanced with DB status)
+app.get('/api/health', (_req, res) => {
+    res.json({ 
+        status: 'UP', 
+        db: mongoose.connection.readyState === 1 ? 'CONNECTED' : 'FAIL',
+        ts: Date.now() 
+    });
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/turfs', turfRoutes);
