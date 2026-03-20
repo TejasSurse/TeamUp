@@ -6,14 +6,19 @@ import Booking from '../models/Booking.js';
 // @access  Public
 export const getTurfs = async (req, res) => {
     try {
-        const { city } = req.query;
+        const { city, limit } = req.query;
         let query = { status: 'Active' };
 
         if (city) {
             query['location.city'] = { $regex: city, $options: 'i' };
         }
 
-        const turfs = await Turf.find(query);
+        let turfsQuery = Turf.find(query);
+        if (limit) {
+            turfsQuery = turfsQuery.limit(parseInt(limit));
+        }
+
+        const turfs = await turfsQuery;
         res.json(turfs);
     } catch (error) {
         res.status(500).json({ message: error.message });

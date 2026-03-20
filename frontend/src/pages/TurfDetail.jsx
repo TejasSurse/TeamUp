@@ -45,18 +45,24 @@ const TurfDetail = () => {
         fetchBookedSlots();
     }, [selectedDate, id]);
 
+    const formatTime = (val) => {
+        const h = Math.floor(val);
+        const m = val % 1 === 0 ? '00' : '30';
+        return `${h}:${m}`;
+    };
+
     const getAvailableHours = () => {
-        const open = parseInt(turf?.openingHours?.open) || 6;
-        const close = parseInt(turf?.openingHours?.close) || 23;
+        const open = parseFloat(turf?.openingHours?.open) || 6;
+        const close = parseFloat(turf?.openingHours?.close) || 23;
         const hours = [];
-        for (let h = open; h < close; h++) hours.push(h);
+        for (let h = open; h < close; h += 0.5) hours.push(h);
         return hours;
     };
 
     const isSlotBooked = (hour) => {
         return bookedSlots.some(slot => {
-            const sS = parseInt(slot.startTime);
-            const sE = parseInt(slot.endTime);
+            const sS = parseFloat(slot.startTime);
+            const sE = parseFloat(slot.endTime);
             return hour >= sS && hour < sE;
         });
     };
@@ -66,13 +72,13 @@ const TurfDetail = () => {
         if (!selectedDate || !startHour || !endHour) {
             return Swal.fire({ icon: 'warning', title: 'Incomplete', text: 'Please select date, start and end time.' });
         }
-        const s = parseInt(startHour);
-        const e = parseInt(endHour);
-        if (e <= s) return Swal.fire({ icon: 'error', title: 'Invalid', text: 'End time must be after start time.' });
+        const s = parseFloat(startHour);
+        const e = parseFloat(endHour);
+        if (e <= s || e - s < 0.5) return Swal.fire({ icon: 'error', title: 'Invalid', text: 'End time must be after start time.' });
 
-        for (let h = s; h < e; h++) {
+        for (let h = s; h < e; h += 0.5) {
             if (isSlotBooked(h)) {
-                return Swal.fire({ icon: 'error', title: 'Slot Taken', text: `${h}:00 - ${h + 1}:00 is already booked.` });
+                return Swal.fire({ icon: 'error', title: 'Slot Taken', text: `${formatTime(h)} - ${formatTime(h + 0.5)} is already booked.` });
             }
         }
 
@@ -85,7 +91,7 @@ const TurfDetail = () => {
                 <div style="text-align:left; font-size:14px; line-height:2">
                     <p><strong>📍 Turf:</strong> ${turf.name}</p>
                     <p><strong>📅 Date:</strong> ${selectedDate}</p>
-                    <p><strong>⏰ Time:</strong> ${s}:00 — ${e}:00 (${duration} hr${duration > 1 ? 's' : ''})</p>
+                    <p><strong>⏰ Time:</strong> ${formatTime(s)} — ${formatTime(e)} (${duration} hr${duration > 1 ? 's' : ''})</p>
                     <p><strong>👥 Players:</strong> ${players}</p>
                     <hr style="margin:8px 0">
                     <p><strong>💰 Total:</strong> ₹${totalCost}</p>
@@ -149,8 +155,8 @@ const TurfDetail = () => {
     );
 
     const hours = getAvailableHours();
-    const start = parseInt(startHour) || 0;
-    const end = parseInt(endHour) || 0;
+    const start = parseFloat(startHour) || 0;
+    const end = parseFloat(endHour) || 0;
     const duration = end > start ? end - start : 0;
     const totalCost = turf.pricePerHour * duration;
     const splitCost = players > 0 ? totalCost / players : 0;
@@ -260,9 +266,9 @@ const TurfDetail = () => {
                                             {hours.map(h => {
                                                 const booked = isSlotBooked(h);
                                                 return (
-                                                    <div key={h} className={`text-center py-4 rounded-2xl text-xs font-black transition-all border-2
+                                                        <div key={h} className={`text-center py-2 px-1 rounded-2xl text-[10px] font-black transition-all border-2
                                                         ${booked ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-50' : 'bg-rose-50/30 text-primary border-primary/10 hover:border-primary hover:bg-white hover:shadow-md cursor-default'}`}>
-                                                        {h}:00
+                                                        {formatTime(h)}
                                                     </div>
                                                 );
                                             })}
@@ -279,7 +285,7 @@ const TurfDetail = () => {
                                                         className="w-full p-4 pl-12 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all font-bold text-gray-700 appearance-none"
                                                     >
                                                         <option value="">Start Time</option>
-                                                        {hours.filter(h => !isSlotBooked(h)).map(h => <option key={h} value={h}>{h}:00</option>)}
+                                                        {hours.filter(h => !isSlotBooked(h)).map(h => <option key={h} value={h}>{formatTime(h)}</option>)}
                                                     </select>
                                                 </div>
                                             </div>
@@ -294,10 +300,10 @@ const TurfDetail = () => {
                                                     >
                                                         <option value="">End Time</option>
                                                         {startHour && (() => {
-                                                            const close = parseInt(turf?.openingHours?.close) || 23;
+                                                            const close = parseFloat(turf?.openingHours?.close) || 23;
                                                             const opts = [];
-                                                            for (let h = start + 1; h <= close; h++) {
-                                                                opts.push(<option key={h} value={h}>{h}:00</option>);
+                                                            for (let h = start + 0.5; h <= close; h += 0.5) {
+                                                                opts.push(<option key={h} value={h}>{formatTime(h)}</option>);
                                                             }
                                                             return opts;
                                                         })()}

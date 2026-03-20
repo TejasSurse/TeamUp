@@ -7,7 +7,7 @@ import User from '../models/User.js';
 // @access  Private
 export const createBooking = async (req, res) => {
     try {
-        const { turfId, date, startTime, endTime, totalPrice, numberOfPlayers } = req.body;
+        const { turfId, date, startTime, endTime, totalPrice, numberOfPlayers, bookerName, paymentAccount } = req.body;
 
         const turf = await Turf.findById(turfId);
         if (!turf) return res.status(404).json({ message: 'Turf not found' });
@@ -17,27 +17,29 @@ export const createBooking = async (req, res) => {
             return res.status(403).json({ message: 'Your account has been blocked. Contact support.' });
         }
 
-        const sStart = parseInt(startTime);
-        const sEnd = parseInt(endTime);
+        const sStart = parseFloat(startTime);
+        const sEnd = parseFloat(endTime);
 
-        if (sEnd <= sStart || sEnd - sStart < 1) {
-            return res.status(400).json({ message: 'Invalid time range. Minimum 1 hour booking.' });
+        if (sEnd <= sStart || sEnd - sStart < 0.5) {
+            return res.status(400).json({ message: 'Invalid time range. Minimum 30 mins booking.' });
         }
 
-        // Check each hour against confirmed bookings only
+        // Check each slot against confirmed bookings only
         const existingBookings = await Booking.find({
             turf: turfId, date,
             bookingStatus: 'Confirmed'
         });
 
-        for (let h = sStart; h < sEnd; h++) {
+        for (let h = sStart; h < sEnd; h += 0.5) {
             const conflict = existingBookings.some(b => {
-                const bS = parseInt(b.startTime);
-                const bE = parseInt(b.endTime);
+                const bS = parseFloat(b.startTime);
+                const bE = parseFloat(b.endTime);
                 return h >= bS && h < bE;
             });
             if (conflict) {
-                return res.status(400).json({ message: `Slot ${h}:00 - ${h + 1}:00 is already booked.` });
+                const slotEnd = h + 0.5;
+                const formatTime = (time) => `${Math.floor(time)}:${time % 1 === 0 ? '00' : '30'}`;
+                return res.status(400).json({ message: `Slot ${formatTime(h)} - ${formatTime(slotEnd)} is already booked.` });
             }
         }
 
@@ -55,6 +57,8 @@ export const createBooking = async (req, res) => {
             totalPrice,
             numberOfPlayers,
             splitCostPerPlayer,
+            bookerName: bookerName || null,
+            paymentAccount: paymentAccount || null,
             bookingStatus: isOwnerBooking ? 'Confirmed' : 'Pending'
         });
 
@@ -105,6 +109,7 @@ export const getOwnerBookings = async (req, res) => {
         const bookings = await Booking.find({ turf: { $in: turfIds } })
             .populate('turf', 'name')
             .populate('user', 'name phone isBlocked')
+            .populate('paymentAccount', 'name')
             .sort({ createdAt: -1 });
         res.json(bookings);
     } catch (error) {
@@ -120,6 +125,7 @@ export const getBookings = async (req, res) => {
         const bookings = await Booking.find()
             .populate('turf', 'name')
             .populate('user', 'name phone')
+            .populate('paymentAccount', 'name')
             .sort({ createdAt: -1 });
         res.json(bookings);
     } catch (error) {

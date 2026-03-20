@@ -3,6 +3,8 @@ import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Swal from 'sweetalert2';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const OwnerDashboard = () => {
     const { user, token, logout } = useContext(AuthContext);
@@ -21,6 +23,13 @@ const OwnerDashboard = () => {
     const [manualData, setManualData] = useState({ turfId: '', date: '', startTime: '', endTime: '', numberOfPlayers: 2 });
     const [dailyDate, setDailyDate] = useState(new Date().toISOString().split('T')[0]);
     const [bookedSlotsForDaily, setBookedSlotsForDaily] = useState([]);
+    
+    // New Feature States
+    const [expenses, setExpenses] = useState([]);
+    const [accounts, setAccounts] = useState([]);
+    const [expenseFormData, setExpenseFormData] = useState({ note: '', amount: '', date: new Date().toISOString().split('T')[0], turfId: '' });
+    const [editExpense, setEditExpense] = useState(null);
+    const [accountName, setAccountName] = useState('');
 
     // Notification Sound
     const audioRef = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'));
@@ -36,11 +45,15 @@ const OwnerDashboard = () => {
     const fetchData = async () => {
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
-            const [turfRes, bookingRes] = await Promise.all([
+            const [turfRes, bookingRes, expenseRes, accRes] = await Promise.all([
                 api.get('/turfs/owner/me', config),
-                api.get('/bookings/owner', config)
+                api.get('/bookings/owner', config),
+                api.get('/expenses', config),
+                api.get('/payment-accounts', config)
             ]);
             setTurfs(turfRes.data);
+            setExpenses(expenseRes.data);
+            setAccounts(accRes.data);
 
             const newBookings = bookingRes.data;
             const currentPending = newBookings.filter(b => b.bookingStatus === 'Pending').length;
@@ -184,17 +197,172 @@ const OwnerDashboard = () => {
         e.preventDefault();
         const turf = turfs.find(t => t._id === manualData.turfId);
         if (!turf) return;
-        const s = parseInt(manualData.startTime), en = parseInt(manualData.endTime);
-        if (en <= s) return Swal.fire({ icon: 'error', title: 'Invalid time' });
-        const totalPrice = turf.pricePerHour * (en - s);
+        const s = parseFloat(manualData.startTime), en = parseFloat(manualData.endTime);
+        if (en <= s || en - s < 0.5) return Swal.fire({ icon: 'error', title: 'Invalid time' });
+        // Use custom price if typed, otherwise calculate automatically
+        const finalPrice = manualData.customPrice ? Number(manualData.customPrice) : turf.pricePerHour * (en - s);
         try {
             await api.post('/bookings', {
                 turfId: manualData.turfId, date: manualData.date, startTime: String(s), endTime: String(en),
-                totalPrice, numberOfPlayers: manualData.numberOfPlayers
+                totalPrice: finalPrice, numberOfPlayers: manualData.numberOfPlayers,
+                bookerName: manualData.bookerName, paymentAccount: manualData.paymentAccount
             }, { headers: { Authorization: `Bearer ${token}` } });
-            Swal.fire({ icon: 'success', title: 'Walk-in Booked!', html: `<p>Total: ₹${totalPrice}</p>`, confirmButtonColor: '#d32f2f' });
-            setManualData({ turfId: '', date: '', startTime: '', endTime: '', numberOfPlayers: 2 }); fetchData();
+            Swal.fire({ icon: 'success', title: 'Walk-in Booked!', html: `<p>Total: ₹${finalPrice}</p>`, confirmButtonColor: '#d32f2f' });
+            setManualData({ turfId: '', date: '', startTime: '', endTime: '', numberOfPlayers: 2, customPrice: '', bookerName: '', paymentAccount: '' }); fetchData();
         } catch (err) { Swal.fire({ icon: 'error', title: 'Failed', text: err.response?.data?.message || 'Slot may be taken.' }); }
+    };
+
+    const handleAddExpense = async (e) => {
+        e.preventDefault();
+        try {
+            if (editExpense) {
+                await api.put(`/expenses/${editExpense._id}`, expenseFormData, { headers: { Authorization: `Bearer ${token}` } });
+                Swal.fire({ icon: 'success', title: 'Expense Updated!', showConfirmButton: false, timer: 1500 });
+                setEditExpense(null);
+            } else {
+                await api.post('/expenses', expenseFormData, { headers: { Authorization: `Bearer ${token}` } });
+                Swal.fire({ icon: 'success', title: 'Expense Added!', showConfirmButton: false, timer: 1500 });
+            }
+            setExpenseFormData({ note: '', amount: '', date: new Date().toISOString().split('T')[0], turfId: '' });
+            fetchData();
+        } catch (err) { Swal.fire({ icon: 'error', title: 'Failed to process expense' }); }
+    };
+    const startEditExpense = (exp) => {
+        setExpenseFormData({
+            note: exp.note, amount: exp.amount, date: exp.date, turfId: exp.turf?._id || ''
+        });
+        setEditExpense(exp);
+    };
+    const handleDeleteExpense = async (id) => {
+        const r = await Swal.fire({ title: 'Delete expense?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d32f2f' });
+        if (!r.isConfirmed) return;
+        try { await api.delete(`/expenses/${id}`, { headers: { Authorization: `Bearer ${token}` } }); fetchData(); } catch (e) {}
+    };
+
+    const handleAddAccount = async (e) => {
+        e.preventDefault();
+        try {
+            await api.post('/payment-accounts', { name: accountName }, { headers: { Authorization: `Bearer ${token}` } });
+            Swal.fire({ icon: 'success', title: 'Account Created!', showConfirmButton: false, timer: 1500 });
+            setAccountName(''); fetchData();
+        } catch (err) {}
+    };
+    const handleDeleteAccount = async (id) => {
+        const r = await Swal.fire({ title: 'Delete account?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d32f2f' });
+        if (!r.isConfirmed) return;
+        try { await api.delete(`/payment-accounts/${id}`, { headers: { Authorization: `Bearer ${token}` } }); fetchData(); } catch (e) {}
+    };
+
+    const getUnifiedLedger = () => {
+        const ledger = [];
+        getFilteredBookings().forEach(b => {
+            if (b.bookingStatus === 'Confirmed' || b.bookingStatus === 'Walk-in') {
+                ledger.push({
+                    id: `b_${b._id}`,
+                    type: 'Booking (Credit)',
+                    date: b.date,
+                    client: b.bookerName || b.user?.name || 'Walk-in',
+                    turf: b.turf?.name || '-',
+                    paymentMode: b.paymentAccount?.name || 'Online/Standard',
+                    amount: b.totalPrice,
+                    timestamp: new Date(`${b.date}T${formatTime(parseFloat(b.startTime) || 0)}`).getTime() || new Date(b.date).getTime()
+                });
+            }
+        });
+        
+        const filteredExpensesList = dateFilter === 'all' ? expenses : expenses.filter(e => {
+            let from, to;
+            const now = new Date();
+            if (dateFilter === 'today') { from = to = now.toISOString().split('T')[0]; }
+            else if (dateFilter === 'month') {
+                from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+                to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+            } else if (dateFilter === 'custom') { from = customFrom; to = customTo; }
+            return e.date >= from && e.date <= to;
+        });
+
+        filteredExpensesList.forEach(e => {
+            ledger.push({
+                id: `e_${e._id}`,
+                type: 'Expense (Debit)',
+                date: e.date,
+                client: e.note || '-',
+                turf: e.turf?.name || 'General',
+                paymentMode: '-',
+                amount: -e.amount,
+                timestamp: new Date(e.date).getTime()
+            });
+        });
+
+        return ledger.sort((a, b) => b.timestamp - a.timestamp); // newest first
+    };
+
+    const handleDownloadMonthSheetPDF = () => {
+        try {
+            const doc = new jsPDF();
+            doc.text(`${user.name || 'Owner'} Statement`, 14, 20);
+            doc.setFontSize(10);
+            if (dateFilter !== 'all') { doc.text(`Date Filter Active`, 14, 26); }
+            
+            const tableColumn = ["Date", "Type", "Turf", "Details / Client", "Payment Mode", "Amount (INR)"];
+            const tableRows = [];
+            
+            const ledger = getUnifiedLedger();
+            let netVal = 0;
+            let totalIncome = 0;
+            let totalExpense = 0;
+            
+            // Ascending order for statement reading
+            [...ledger].reverse().forEach(item => {
+                const row = [item.date, item.type, item.turf, item.client, item.paymentMode, item.amount > 0 ? `+ Rs. ${item.amount}` : `- Rs. ${Math.abs(item.amount)}`];
+                tableRows.push(row);
+                netVal += item.amount;
+                if (item.amount > 0) totalIncome += item.amount;
+                else totalExpense += Math.abs(item.amount);
+            });
+            
+            autoTable(doc, { 
+                head: [tableColumn], 
+                body: tableRows, 
+                startY: 30,
+                didParseCell: function(data) {
+                    if (data.section === 'body' && data.column.index === 5) {
+                        if (data.cell.raw.toString().startsWith('+')) {
+                            data.cell.styles.textColor = [34, 197, 94]; // green-500
+                            data.cell.styles.fontStyle = 'bold';
+                        } else if (data.cell.raw.toString().startsWith('-')) {
+                            data.cell.styles.textColor = [239, 68, 68]; // red-500
+                            data.cell.styles.fontStyle = 'bold';
+                        }
+                    }
+                }
+            });
+            
+            const finalY = doc.lastAutoTable.finalY + 10;
+            doc.setFontSize(11);
+            
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Total Gross Income: `, 14, finalY);
+            doc.setTextColor(34, 197, 94);
+            doc.text(`+ Rs. ${totalIncome}`, 55, finalY);
+            
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Total Expenses: `, 14, finalY + 6);
+            doc.setTextColor(239, 68, 68);
+            doc.text(`- Rs. ${totalExpense}`, 55, finalY + 6);
+            
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Net Summary: `, 14, finalY + 14);
+            doc.setTextColor(netVal > 0 ? 34 : (netVal < 0 ? 239 : 0), netVal > 0 ? 197 : (netVal < 0 ? 68 : 0), netVal > 0 ? 94 : (netVal < 0 ? 68 : 0));
+            doc.text(`${netVal > 0 ? '+' : (netVal < 0 ? '-' : '')} Rs. ${Math.abs(netVal)}`, 55, finalY + 14);
+            
+            doc.setTextColor(0, 0, 0); // reset
+            doc.save(`${(user.name || 'owner').replace(/\s+/g, '_').toLowerCase()}_statement_${new Date().getTime()}.pdf`);
+        } catch (e) {
+            Swal.fire({ icon: 'error', title: 'PDF Error', text: 'Error generating PDF. Please try again.' });
+            console.error(e);
+        }
     };
 
     const handleLogout = () => { logout(); navigate('/login'); };
@@ -207,7 +375,9 @@ const OwnerDashboard = () => {
         { id: 'bookings', label: 'Bookings', icon: 'fa-solid fa-calendar-check' },
         { id: 'daily', label: 'Daily View', icon: 'fa-solid fa-calendar-day' },
         { id: 'revenue', label: 'Revenue', icon: 'fa-solid fa-indian-rupee-sign' },
-        { id: 'manual', label: 'Walk-in', icon: 'fa-solid fa-ticket' }
+        { id: 'manual', label: 'Walk-in', icon: 'fa-solid fa-ticket' },
+        { id: 'expenses', label: 'Expenses', icon: 'fa-solid fa-receipt' },
+        { id: 'accounts', label: 'Accounts', icon: 'fa-solid fa-building-columns' },
     ];
 
     const statusBadge = (s) => {
@@ -218,6 +388,35 @@ const OwnerDashboard = () => {
             Cancelled: 'bg-gray-100 text-gray-600 border-gray-200'
         };
         return map[s] || 'bg-gray-100 text-gray-600';
+    };
+
+    // Recalculating revenue subtracting expenses
+    const totalExpenses = expenses.reduce((a, b) => a + b.amount, 0);
+    const filteredExpenses = dateFilter === 'all' ? totalExpenses : expenses.filter(e => {
+        let from, to;
+        const now = new Date();
+        if (dateFilter === 'today') { from = to = now.toISOString().split('T')[0]; }
+        else if (dateFilter === 'month') {
+            from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+            to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+        } else if (dateFilter === 'custom') { from = customFrom; to = customTo; }
+        return e.date >= from && e.date <= to;
+    }).reduce((a, b) => a + b.amount, 0);
+
+    const netFilteredRevenue = filteredRevenue - filteredExpenses;
+    const netTotalRevenue = totalRevenue - totalExpenses;
+
+    const generateTimeSlots = () => {
+        const slots = [];
+        for (let i = 6; i < 24; i += 0.5) {
+            slots.push(i);
+        }
+        return slots;
+    };
+    const formatTime = (val) => {
+        const h = Math.floor(val);
+        const m = val % 1 === 0 ? '00' : '30';
+        return `${h}:${m}`;
     };
 
     return (
@@ -589,7 +788,7 @@ const OwnerDashboard = () => {
                                             {bookings.map(b => (
                                                 <tr key={b._id} className="hover:bg-rose-50/30 transition-colors">
                                                     <td className="p-6">
-                                                        <p className="font-black text-gray-900">{b.user?.name || 'Walk-in'}</p>
+                                                        <p className="font-black text-gray-900">{b.bookerName || b.user?.name || 'Walk-in'}</p>
                                                         <p className="text-xs text-gray-500 font-bold">{b.user?.phone || 'Manual Entry'}</p>
                                                     </td>
                                                     <td className="p-6">
@@ -597,10 +796,11 @@ const OwnerDashboard = () => {
                                                     </td>
                                                     <td className="p-6">
                                                         <p className="font-bold text-gray-800 tracking-tight">{b.date}</p>
-                                                        <p className="text-[10px] text-primary font-black uppercase tracking-tighter">{b.startTime}:00–{b.endTime}:00</p>
+                                                        <p className="text-[10px] text-primary font-black uppercase tracking-tighter">{formatTime(parseFloat(b.startTime))}–{formatTime(parseFloat(b.endTime))}</p>
                                                     </td>
                                                     <td className="p-6">
                                                         <p className="font-black text-gray-900 text-lg">₹{b.totalPrice}</p>
+                                                        {b.paymentAccount && <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest bg-gray-100 rounded-lg px-2 py-1 inline-block mt-1"><i className="fa-solid fa-wallet"></i> {b.paymentAccount.name}</p>}
                                                     </td>
                                                     <td className="p-6">
                                                         <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${statusBadge(b.bookingStatus)}`}>
@@ -645,18 +845,18 @@ const OwnerDashboard = () => {
 
                                         <div className="relative">
                                             <div className="flex overflow-x-auto pb-6 gap-2 no-scrollbar">
-                                                {Array.from({ length: 18 }, (_, i) => i + 6).map(h => {
+                                                {generateTimeSlots().map(h => {
                                                     const bookingsForThisTurf = bookings.filter(b => b.turf?._id === t._id && b.date === dailyDate && b.bookingStatus === 'Confirmed');
-                                                    const booking = bookingsForThisTurf.find(b => parseInt(b.startTime) <= h && parseInt(b.endTime) > h);
+                                                    const booking = bookingsForThisTurf.find(b => parseFloat(b.startTime) <= h && parseFloat(b.endTime) > h);
 
                                                     return (
                                                         <div key={h} className="flex-shrink-0 w-24">
-                                                            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 text-center">{h}:00</div>
+                                                            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 text-center">{formatTime(h)}</div>
                                                             <div className={`h-24 rounded-2xl flex items-center justify-center p-2 text-center transition-all border-2
                                                                 ${booking ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' : 'bg-gray-50 text-gray-300 border-dashed border-gray-200'}`}>
                                                                 {booking ? (
                                                                     <div className="overflow-hidden">
-                                                                        <p className="font-black text-[10px] leading-tight truncate">{booking.user?.name || 'Walk-in'}</p>
+                                                                        <p className="font-black text-[10px] leading-tight truncate">{booking.bookerName || booking.user?.name || 'Walk-in'}</p>
                                                                         <p className="text-[8px] opacity-80 font-bold mt-1 uppercase tracking-tighter">#{booking._id.slice(-4)}</p>
                                                                     </div>
                                                                 ) : (
@@ -681,9 +881,14 @@ const OwnerDashboard = () => {
 
                     {activeTab === 'revenue' && (
                         <div>
-                            <div className="mb-10">
-                                <h1 className="text-3xl md:text-4xl font-black text-gray-900">Revenue Stream</h1>
-                                <p className="text-gray-500 mt-2 font-medium">Track your earnings and filtered analytics.</p>
+                            <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                <div>
+                                    <h1 className="text-3xl md:text-4xl font-black text-gray-900">Revenue Stream</h1>
+                                    <p className="text-gray-500 mt-2 font-medium">Track your earnings and filtered analytics.</p>
+                                </div>
+                                <button onClick={handleDownloadMonthSheetPDF} className="bg-primary text-white px-8 py-4 rounded-2xl font-black text-sm shadow-xl flex items-center gap-3">
+                                    <i className="fa-solid fa-file-pdf"></i> Download PDF
+                                </button>
                             </div>
 
                             <div className="bg-white rounded-3xl shadow-sm p-6 mb-10 border border-gray-100 flex items-center gap-4 flex-wrap">
@@ -699,20 +904,63 @@ const OwnerDashboard = () => {
                                 )}
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
                                 <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border-b-8 border-primary">
-                                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Targeted Period</p>
+                                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Net Period Revenue</p>
                                     <div className="flex items-baseline gap-2">
                                         <span className="text-sm font-black text-gray-400 tracking-widest">INR</span>
-                                        <p className="text-5xl font-black text-primary tracking-tighter">{filteredRevenue.toLocaleString()}</p>
+                                        <p className="text-5xl font-black text-primary tracking-tighter">{netFilteredRevenue.toLocaleString()}</p>
                                     </div>
+                                    <p className="text-xs text-gray-400 mt-2">Gross: {filteredRevenue} - Exp: {filteredExpenses}</p>
                                 </div>
                                 <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border-b-8 border-indigo-500">
-                                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Lifetime Gross</p>
+                                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Net Lifetime Gross</p>
                                     <div className="flex items-baseline gap-2">
                                         <span className="text-sm font-black text-gray-400 tracking-widest">INR</span>
-                                        <p className="text-5xl font-black text-indigo-600 tracking-tighter">{totalRevenue.toLocaleString()}</p>
+                                        <p className="text-5xl font-black text-indigo-600 tracking-tighter">{netTotalRevenue.toLocaleString()}</p>
                                     </div>
+                                    <p className="text-xs text-gray-400 mt-2">Gross: {totalRevenue} - Exp: {totalExpenses}</p>
+                                </div>
+                            </div>
+                            
+                            <h2 className="text-2xl font-black text-gray-900 mb-6 flex items-center gap-3"><i className="fa-solid fa-list-check text-primary"></i> Detailed Ledger & Statement</h2>
+                            <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="text-left text-gray-400 text-[10px] uppercase tracking-widest bg-gray-50/50 border-b">
+                                                <th className="p-6">Date</th>
+                                                <th className="p-6">Type</th>
+                                                <th className="p-6">Turf</th>
+                                                <th className="p-6">Details / Client</th>
+                                                <th className="p-6">Payment Box</th>
+                                                <th className="p-6 text-right">Amount (INR)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {getUnifiedLedger().map(item => (
+                                                <tr key={item.id} className="hover:bg-rose-50/30 transition-colors">
+                                                    <td className="p-6 font-bold text-gray-900">{item.date}</td>
+                                                    <td className="p-6">
+                                                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${item.amount > 0 ? 'bg-green-50 text-green-600 border-green-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
+                                                            {item.type}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-6 font-bold text-gray-700">{item.turf}</td>
+                                                    <td className="p-6 font-bold text-gray-800">{item.client}</td>
+                                                    <td className="p-6 text-xs text-gray-500 font-black"><i className="fa-solid fa-wallet mr-2 opacity-50"></i>{item.paymentMode}</td>
+                                                    <td className={`p-6 text-right font-black text-lg ${item.amount > 0 ? 'text-green-500' : 'text-rose-500'}`}>
+                                                        {item.amount > 0 ? '+' : '-'}₹{Math.abs(item.amount)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {getUnifiedLedger().length === 0 && (
+                                                <tr>
+                                                    <td colSpan="6" className="p-10 text-center text-gray-400 font-bold">No ledger activities in this period.</td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
@@ -754,15 +1002,32 @@ const OwnerDashboard = () => {
                                             <input type="number" min="1" className="w-full pl-14 pr-6 py-5 bg-gray-50 border-2 border-transparent rounded-[2rem] focus:bg-white focus:border-primary outline-none transition-all font-black text-gray-700" value={manualData.numberOfPlayers} onChange={e => setManualData({ ...manualData, numberOfPlayers: Number(e.target.value) })} />
                                         </div>
                                     </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Booker Name (Optional)</label>
+                                        <div className="relative">
+                                            <i className="fa-solid fa-user absolute left-5 top-1/2 -translate-y-1/2 text-gray-300"></i>
+                                            <input type="text" placeholder="Walk-in Customer Name" className="w-full pl-14 pr-6 py-5 bg-gray-50 border-2 border-transparent rounded-[2rem] focus:bg-white focus:border-primary outline-none transition-all font-black text-gray-700" value={manualData.bookerName || ''} onChange={e => setManualData({ ...manualData, bookerName: e.target.value })} />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Payment Route (Optional)</label>
+                                        <div className="relative">
+                                            <i className="fa-solid fa-wallet absolute left-5 top-1/2 -translate-y-1/2 text-gray-300"></i>
+                                            <select className="w-full pl-14 pr-6 py-5 bg-gray-50 border-2 border-transparent rounded-[2rem] focus:bg-white focus:border-primary outline-none transition-all font-black text-gray-700 appearance-none" value={manualData.paymentAccount || ''} onChange={e => setManualData({ ...manualData, paymentAccount: e.target.value })}>
+                                                <option value="">-- Select Payment Mode --</option>
+                                                {accounts.map(a => <option key={a._id} value={a._id}>{a.name}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
                                     <div className="md:col-span-2 space-y-4">
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Live Availability Checklist</label>
                                         <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-9 gap-2">
-                                            {Array.from({ length: 18 }, (_, i) => i + 6).map(h => {
-                                                const isBooked = bookedSlotsForDaily.some(slot => h >= parseInt(slot.startTime) && h < parseInt(slot.endTime));
+                                            {generateTimeSlots().map(h => {
+                                                const isBooked = bookedSlotsForDaily.some(slot => h >= parseFloat(slot.startTime) && h < parseFloat(slot.endTime));
                                                 return (
-                                                    <div key={h} className={`text-center py-3 rounded-xl text-[10px] font-black transition-all border-2
+                                                    <div key={h} className={`text-center py-2 px-1 rounded-xl text-[10px] font-black transition-all border-2
                                                         ${isBooked ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-green-50 text-green-600 border-green-100'}`}>
-                                                        {h}:00
+                                                        {formatTime(h)}
                                                     </div>
                                                 );
                                             })}
@@ -777,7 +1042,7 @@ const OwnerDashboard = () => {
                                         <div className="relative">
                                             <i className="fa-solid fa-clock absolute left-5 top-1/2 -translate-y-1/2 text-primary"></i>
                                             <select required className="w-full pl-14 pr-6 py-5 bg-gray-50 border-2 border-transparent rounded-[2rem] focus:bg-white focus:border-primary outline-none transition-all font-black text-gray-700 appearance-none" value={manualData.startTime} onChange={e => setManualData({ ...manualData, startTime: e.target.value })}>
-                                                <option value="">-- Start --</option>{Array.from({ length: 17 }, (_, i) => i + 6).map(h => <option key={h} value={h}>{h}:00</option>)}
+                                                <option value="">-- Start --</option>{generateTimeSlots().map(h => <option key={h} value={h}>{formatTime(h)}</option>)}
                                             </select>
                                         </div>
                                     </div>
@@ -786,14 +1051,21 @@ const OwnerDashboard = () => {
                                         <div className="relative">
                                             <i className="fa-solid fa-stopwatch absolute left-5 top-1/2 -translate-y-1/2 text-gray-300"></i>
                                             <select required className="w-full pl-14 pr-6 py-5 bg-gray-50 border-2 border-transparent rounded-[2rem] focus:bg-white focus:border-primary outline-none transition-all font-black text-gray-700 appearance-none" value={manualData.endTime} onChange={e => setManualData({ ...manualData, endTime: e.target.value })}>
-                                                <option value="">-- End --</option>{manualData.startTime && Array.from({ length: 23 - parseInt(manualData.startTime) }, (_, i) => parseInt(manualData.startTime) + i + 1).map(h => <option key={h} value={h}>{h}:00</option>)}
+                                                <option value="">-- End --</option>{manualData.startTime && generateTimeSlots().filter(h => h > parseFloat(manualData.startTime)).map(h => <option key={h} value={h}>{formatTime(h)}</option>)}
                                             </select>
+                                        </div>
+                                    </div>
+                                    <div className="md:col-span-2 space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Custom Dynamic Price (₹) - Overrides Default</label>
+                                        <div className="relative">
+                                            <i className="fa-solid fa-indian-rupee-sign absolute left-5 top-1/2 -translate-y-1/2 text-primary font-black"></i>
+                                            <input type="number" placeholder="Enter custom price or leave blank for auto" className="w-full pl-14 pr-6 py-5 bg-gray-50 border-2 border-transparent rounded-[2rem] focus:bg-white focus:border-primary outline-none transition-all font-black text-xl text-primary" value={manualData.customPrice || ''} onChange={e => setManualData({ ...manualData, customPrice: e.target.value })} />
                                         </div>
                                     </div>
                                     {manualData.turfId && manualData.startTime && manualData.endTime && (
                                         <div className="md:col-span-2 bg-rose-50 p-8 rounded-[2rem] border-2 border-primary/10 flex items-center justify-between">
                                             <span className="text-gray-500 font-bold uppercase tracking-widest text-xs">Total to Collect:</span>
-                                            <span className="text-3xl font-black text-primary">₹{(turfs.find(t => t._id === manualData.turfId)?.pricePerHour || 0) * (parseInt(manualData.endTime) - parseInt(manualData.startTime))}</span>
+                                            <span className="text-3xl font-black text-primary">₹{manualData.customPrice ? manualData.customPrice : (turfs.find(t => t._id === manualData.turfId)?.pricePerHour || 0) * (parseFloat(manualData.endTime) - parseFloat(manualData.startTime))}</span>
                                         </div>
                                     )}
                                     <div className="md:col-span-2">
@@ -802,6 +1074,95 @@ const OwnerDashboard = () => {
                                         </button>
                                     </div>
                                 </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'expenses' && (
+                        <div>
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-10">
+                                <div>
+                                    <h1 className="text-3xl md:text-4xl font-black text-gray-900">Expenses Tracker</h1>
+                                    <p className="text-gray-500 mt-2 font-medium">Record operations expenses (deducts from revenue).</p>
+                                </div>
+                            </div>
+                            <div className="bg-white rounded-[2.5rem] shadow-xl p-8 mb-10 border border-gray-100">
+                                <form onSubmit={handleAddExpense} className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                    <div className="col-span-1">
+                                        <input type="date" required value={expenseFormData.date} onChange={e => setExpenseFormData({ ...expenseFormData, date: e.target.value })} className="w-full px-6 py-4 bg-gray-50 rounded-2xl font-bold border-2 border-transparent focus:border-primary outline-none" />
+                                    </div>
+                                    <div className="col-span-1">
+                                        <select value={expenseFormData.turfId} onChange={e => setExpenseFormData({ ...expenseFormData, turfId: e.target.value })} className="w-full px-6 py-4 bg-gray-50 rounded-2xl font-bold border-2 border-transparent focus:border-primary outline-none appearance-none">
+                                            <option value="">-- All Turfs --</option>
+                                            {turfs.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <input type="text" placeholder="Expense Note" required value={expenseFormData.note} onChange={e => setExpenseFormData({ ...expenseFormData, note: e.target.value })} className="w-full px-6 py-4 bg-gray-50 rounded-2xl font-bold border-2 border-transparent focus:border-primary outline-none" />
+                                    </div>
+                                    <div className="col-span-1 md:col-start-3">
+                                        <input type="number" placeholder="Amount ₹" required value={expenseFormData.amount} onChange={e => setExpenseFormData({ ...expenseFormData, amount: Number(e.target.value) })} className="w-full px-6 py-4 bg-gray-50 rounded-2xl font-black text-primary border-2 border-transparent focus:border-primary outline-none" />
+                                    </div>
+                                    <div className="col-span-1 md:col-start-4 flex gap-2">
+                                        <button type="submit" className="flex-1 bg-primary text-white py-4 rounded-2xl font-black flex justify-center items-center gap-2 hover:bg-primary-dark shadow-xl"><i className={`fa-solid ${editExpense ? 'fa-check' : 'fa-plus'}`}></i> {editExpense ? 'Update' : 'Add'}</button>
+                                        {editExpense && (
+                                            <button type="button" onClick={() => { setEditExpense(null); setExpenseFormData({ note: '', amount: '', date: new Date().toISOString().split('T')[0], turfId: '' }); }} className="bg-gray-100 text-gray-500 py-4 px-6 rounded-2xl font-black">Cancel</button>
+                                        )}
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-50">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="bg-gray-50 text-gray-400 font-bold uppercase tracking-widest text-[10px] text-left">
+                                            <th className="p-6">Date</th>
+                                            <th className="p-6">Description</th>
+                                            <th className="p-6">Turf</th>
+                                            <th className="p-6">Amount (₹)</th>
+                                            <th className="p-6 text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {expenses.map(e => (
+                                            <tr key={e._id} className="hover:bg-rose-50/20">
+                                                <td className="p-6 font-bold text-gray-700">{e.date}</td>
+                                                <td className="p-6 font-bold text-gray-900">{e.note}</td>
+                                                <td className="p-6 text-gray-500">{e.turf?.name || 'General'}</td>
+                                                <td className="p-6 font-black text-rose-500">-₹{e.amount}</td>
+                                                <td className="p-6 flex justify-end gap-2">
+                                                    <button onClick={() => startEditExpense(e)} className="text-gray-400 hover:text-primary bg-gray-50 hover:bg-rose-50 w-8 h-8 rounded-lg flex items-center justify-center transition-all"><i className="fa-solid fa-pen"></i></button>
+                                                    <button onClick={() => handleDeleteExpense(e._id)} className="text-gray-400 hover:text-rose-500 bg-gray-50 hover:bg-rose-50 w-8 h-8 rounded-lg flex items-center justify-center transition-all"><i className="fa-solid fa-trash-can"></i></button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {expenses.length === 0 && <tr><td colSpan="5" className="p-6 text-center text-gray-400">No expenses recorded.</td></tr>}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'accounts' && (
+                        <div className="max-w-4xl mx-auto">
+                            <div className="mb-10">
+                                <h1 className="text-3xl md:text-4xl font-black text-gray-900">Payment Accounts</h1>
+                                <p className="text-gray-500 mt-2 font-medium">Create routes for walk-in payments (Cash, Supervisor, Bank).</p>
+                            </div>
+                            <div className="bg-white rounded-[2.5rem] shadow-xl p-8 mb-10 flex gap-4 border border-gray-100">
+                                <input type="text" placeholder="Account Name (e.g., By Cash, UPI, Supervisor X)" required value={accountName} onChange={e => setAccountName(e.target.value)} className="flex-grow px-6 py-4 bg-gray-50 rounded-2xl font-bold border-2 border-transparent focus:border-primary outline-none" />
+                                <button onClick={handleAddAccount} className="bg-primary text-white px-8 py-4 rounded-2xl font-black hover:bg-primary-dark shadow-lg">Create</button>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                                {accounts.map(a => (
+                                    <div key={a._id} className="bg-white shadow-xl rounded-2xl p-6 border border-gray-100 flex items-center justify-between group hover:border-primary/20 transition-all">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center text-xl"><i className="fa-solid fa-wallet"></i></div>
+                                            <div><p className="font-black text-gray-900">{a.name}</p><p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Active</p></div>
+                                        </div>
+                                        <button onClick={() => handleDeleteAccount(a._id)} className="w-8 h-8 rounded-xl bg-gray-50 text-gray-400 hover:text-rose-500 hover:bg-rose-50 flex items-center justify-center transition-all"><i className="fa-solid fa-xmark"></i></button>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     )}

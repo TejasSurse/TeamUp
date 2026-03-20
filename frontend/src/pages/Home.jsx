@@ -8,14 +8,17 @@ import api from '../services/api';
 const Home = () => {
     const [turfs, setTurfs] = useState([]);
     const [search, setSearch] = useState('');
+    const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
 
     useEffect(() => {
         const fetchTurfs = async () => {
             try {
-                const { data } = await api.get('/turfs');
-                setTurfs(data.slice(0, 3));
+                setLoading(true);
+                const { data } = await api.get('/turfs?limit=3');
+                setTurfs(data);
             } catch (error) { console.error(error); }
+            finally { setLoading(false); }
         };
         fetchTurfs();
     }, []);
@@ -103,33 +106,54 @@ const Home = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {turfs.map((t) => (
-                            <div key={t._id} onClick={() => navigate(`/turfs/${t._id}`)} className="bg-white rounded-[2.5rem] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 cursor-pointer group">
-                                <div className="h-64 relative">
-                                    <img src={t.images?.[0] || "https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&q=75&w=600"} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={t.name} loading="lazy" decoding="async" />
-                                    <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-2xl shadow-lg">
-                                        <p className="font-black text-primary text-sm flex items-center gap-1">₹{t.pricePerHour}<span className="text-[10px] text-gray-400 font-normal">/hr</span></p>
-                                    </div>
-                                </div>
-                                <div className="p-8">
-                                    <h3 className="text-2xl font-black text-gray-900 group-hover:text-primary transition-colors">{t.name}</h3>
-                                    <p className="text-gray-500 font-medium text-sm mt-2 flex items-center gap-1">
-                                        <i className="fa-solid fa-location-dot text-rose-300"></i>
-                                        {t.location.city}
-                                    </p>
-                                    <div className="mt-8 pt-6 border-t border-gray-50 flex items-center justify-between">
-                                        <div className="flex gap-2">
-                                            {t.sportTypes?.slice(0, 2).map((s, idx) => (
-                                                <span key={idx} className="bg-rose-50 text-primary text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full">{s}</span>
-                                            ))}
-                                        </div>
-                                        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
-                                            <i className="fa-solid fa-plus"></i>
+                        {loading ? (
+                            Array.from({ length: 3 }).map((_, i) => (
+                                <div key={i} className="bg-white rounded-[2.5rem] overflow-hidden shadow-sm animate-pulse">
+                                    <div className="h-64 bg-gray-200 w-full relative"></div>
+                                    <div className="p-8">
+                                        <div className="h-8 bg-gray-200 rounded w-3/4 mb-4"></div>
+                                        <div className="h-4 bg-gray-200 rounded w-1/2 mb-8"></div>
+                                        <div className="mt-8 pt-6 border-t border-gray-50 flex items-center justify-between">
+                                            <div className="flex gap-2 w-full">
+                                                <div className="h-6 bg-gray-200 rounded-full w-16"></div>
+                                                <div className="h-6 bg-gray-200 rounded-full w-16"></div>
+                                            </div>
+                                            <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            ))
+                        ) : turfs.length > 0 ? (
+                            turfs.map((t) => (
+                                <div key={t._id} onClick={() => navigate(`/turfs/${t._id}`)} className="bg-white rounded-[2.5rem] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 cursor-pointer group">
+                                    <div className="h-64 relative">
+                                        <img src={t.images?.[0] || "https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&q=75&w=600"} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={t.name} loading="lazy" decoding="async" />
+                                        <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-2xl shadow-lg">
+                                            <p className="font-black text-primary text-sm flex items-center gap-1">₹{t.pricePerHour}<span className="text-[10px] text-gray-400 font-normal">/hr</span></p>
+                                        </div>
+                                    </div>
+                                    <div className="p-8">
+                                        <h3 className="text-2xl font-black text-gray-900 group-hover:text-primary transition-colors">{t.name}</h3>
+                                        <p className="text-gray-500 font-medium text-sm mt-2 flex items-center gap-1">
+                                            <i className="fa-solid fa-location-dot text-rose-300"></i>
+                                            {t.location.city}
+                                        </p>
+                                        <div className="mt-8 pt-6 border-t border-gray-50 flex items-center justify-between">
+                                            <div className="flex gap-2">
+                                                {t.sportTypes?.slice(0, 2).map((s, idx) => (
+                                                    <span key={idx} className="bg-rose-50 text-primary text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full">{s}</span>
+                                                ))}
+                                            </div>
+                                            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
+                                                <i className="fa-solid fa-plus"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="col-span-1 md:col-span-3 text-center text-gray-500 py-10 font-medium">No trending turfs available right now.</p>
+                        )}
                     </div>
                 </section>
 

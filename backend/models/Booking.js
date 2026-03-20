@@ -13,7 +13,9 @@ const bookingSchema = new mongoose.Schema({
         type: String,
         enum: ['Pending', 'Confirmed', 'Rejected', 'Cancelled'],
         default: 'Pending'
-    }
+    },
+    bookerName: { type: String, default: null },
+    paymentAccount: { type: String, default: null }
 }, { timestamps: true });
 
 export default mongoose.model('Booking', bookingSchema);

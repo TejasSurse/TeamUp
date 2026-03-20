@@ -9,6 +9,8 @@ import turfRoutes from './routes/turfRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import bookingRoutes from './routes/bookingRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import expenseRoutes from './routes/expenseRoutes.js';
+import paymentAccountRoutes from './routes/paymentAccountRoutes.js';
 
 dotenv.config();
 connectDB();
@@ -83,6 +85,8 @@ app.use('/api/turfs', turfRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/expenses', expenseRoutes);
+app.use('/api/payment-accounts', paymentAccountRoutes);
 
 app.get('/', (req, res) => {
     res.send('API is running...');
