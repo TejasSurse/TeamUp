@@ -15,7 +15,7 @@ const bookingSchema = new mongoose.Schema({
         default: 'Pending'
     },
     bookerName: { type: String, default: null },
-    paymentAccount: { type: String, default: null }
+    paymentAccount: { type: mongoose.Schema.Types.ObjectId, ref: 'PaymentAccount', default: null }
 }, { timestamps: true });
 
 export default mongoose.model('Booking', bookingSchema);

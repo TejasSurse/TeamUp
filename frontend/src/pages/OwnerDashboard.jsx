@@ -20,7 +20,7 @@ const OwnerDashboard = () => {
     const [customTo, setCustomTo] = useState('');
     const [editTurf, setEditTurf] = useState(null);
     const [formData, setFormData] = useState({ name: '', description: '', address: '', city: '', pricePerHour: '', sportTypes: '', images: null });
-    const [manualData, setManualData] = useState({ turfId: '', date: '', startTime: '', endTime: '', numberOfPlayers: 2 });
+    const [manualData, setManualData] = useState({ turfId: '', date: '', startTime: '', endTime: '', numberOfPlayers: 2, bookerName: '', paymentAccount: '', customPrice: '' });
     const [dailyDate, setDailyDate] = useState(new Date().toISOString().split('T')[0]);
     const [bookedSlotsForDaily, setBookedSlotsForDaily] = useState([]);
     
@@ -311,14 +311,19 @@ const OwnerDashboard = () => {
             let netVal = 0;
             let totalIncome = 0;
             let totalExpense = 0;
+            let accountBreakdown = {};
             
             // Ascending order for statement reading
             [...ledger].reverse().forEach(item => {
                 const row = [item.date, item.type, item.turf, item.client, item.paymentMode, item.amount > 0 ? `+ Rs. ${item.amount}` : `- Rs. ${Math.abs(item.amount)}`];
                 tableRows.push(row);
                 netVal += item.amount;
-                if (item.amount > 0) totalIncome += item.amount;
-                else totalExpense += Math.abs(item.amount);
+                if (item.amount > 0) {
+                    totalIncome += item.amount;
+                    accountBreakdown[item.paymentMode] = (accountBreakdown[item.paymentMode] || 0) + item.amount;
+                } else {
+                    totalExpense += Math.abs(item.amount);
+                }
             });
             
             autoTable(doc, { 
@@ -346,16 +351,27 @@ const OwnerDashboard = () => {
             doc.setTextColor(34, 197, 94);
             doc.text(`+ Rs. ${totalIncome}`, 55, finalY);
             
+            let currentY = finalY + 7;
+            doc.setFontSize(9);
+            Object.keys(accountBreakdown).forEach(acc => {
+                doc.setTextColor(150, 150, 150);
+                doc.text(`> ${acc}: `, 16, currentY);
+                doc.setTextColor(34, 197, 94);
+                doc.text(`Rs. ${accountBreakdown[acc]}`, 55, currentY);
+                currentY += 5;
+            });
+            
+            doc.setFontSize(11);
             doc.setTextColor(0, 0, 0);
-            doc.text(`Total Expenses: `, 14, finalY + 6);
+            doc.text(`Total Expenses: `, 14, currentY + 3);
             doc.setTextColor(239, 68, 68);
-            doc.text(`- Rs. ${totalExpense}`, 55, finalY + 6);
+            doc.text(`- Rs. ${totalExpense}`, 55, currentY + 3);
             
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(0, 0, 0);
-            doc.text(`Net Summary: `, 14, finalY + 14);
+            doc.text(`Net Summary: `, 14, currentY + 11);
             doc.setTextColor(netVal > 0 ? 34 : (netVal < 0 ? 239 : 0), netVal > 0 ? 197 : (netVal < 0 ? 68 : 0), netVal > 0 ? 94 : (netVal < 0 ? 68 : 0));
-            doc.text(`${netVal > 0 ? '+' : (netVal < 0 ? '-' : '')} Rs. ${Math.abs(netVal)}`, 55, finalY + 14);
+            doc.text(`${netVal > 0 ? '+' : (netVal < 0 ? '-' : '')} Rs. ${Math.abs(netVal)}`, 55, currentY + 11);
             
             doc.setTextColor(0, 0, 0); // reset
             doc.save(`${(user.name || 'owner').replace(/\s+/g, '_').toLowerCase()}_statement_${new Date().getTime()}.pdf`);

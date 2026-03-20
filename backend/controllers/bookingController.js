@@ -1,6 +1,7 @@
 import Booking from '../models/Booking.js';
 import Turf from '../models/Turf.js';
 import User from '../models/User.js';
+import PaymentAccount from '../models/PaymentAccount.js';
 
 // @desc    Create new booking
 // @route   POST /api/bookings
