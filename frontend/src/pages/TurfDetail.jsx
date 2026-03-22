@@ -47,15 +47,14 @@ const TurfDetail = () => {
 
     const formatTime = (val) => {
         const h = Math.floor(val);
-        const m = val % 1 === 0 ? '00' : '30';
-        return `${h}:${m}`;
+        return `${h}:00`;
     };
 
     const getAvailableHours = () => {
         const open = parseFloat(turf?.openingHours?.open) || 6;
         const close = parseFloat(turf?.openingHours?.close) || 23;
         const hours = [];
-        for (let h = open; h < close; h += 0.5) hours.push(h);
+        for (let h = open; h < close; h += 1) hours.push(h);
         return hours;
     };
 
@@ -74,11 +73,11 @@ const TurfDetail = () => {
         }
         const s = parseFloat(startHour);
         const e = parseFloat(endHour);
-        if (e <= s || e - s < 0.5) return Swal.fire({ icon: 'error', title: 'Invalid', text: 'End time must be after start time.' });
+        if (e <= s || e - s < 1) return Swal.fire({ icon: 'error', title: 'Invalid', text: 'End time must be after start time and at least 1 hour duration.' });
 
-        for (let h = s; h < e; h += 0.5) {
+        for (let h = s; h < e; h += 1) {
             if (isSlotBooked(h)) {
-                return Swal.fire({ icon: 'error', title: 'Slot Taken', text: `${formatTime(h)} - ${formatTime(h + 0.5)} is already booked.` });
+                return Swal.fire({ icon: 'error', title: 'Slot Taken', text: `${formatTime(h)} - ${formatTime(h + 1)} is already booked.` });
             }
         }
 
@@ -302,7 +301,7 @@ const TurfDetail = () => {
                                                         {startHour && (() => {
                                                             const close = parseFloat(turf?.openingHours?.close) || 23;
                                                             const opts = [];
-                                                            for (let h = start + 0.5; h <= close; h += 0.5) {
+                                                            for (let h = start + 1; h <= close; h += 1) {
                                                                 opts.push(<option key={h} value={h}>{formatTime(h)}</option>);
                                                             }
                                                             return opts;

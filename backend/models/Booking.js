@@ -7,6 +7,7 @@ const bookingSchema = new mongoose.Schema({
     startTime: { type: String, required: true },
     endTime: { type: String, required: true },
     totalPrice: { type: Number, required: true },
+    advanceAmount: { type: Number, default: 0 },
     numberOfPlayers: { type: Number, required: true, default: 1 },
     splitCostPerPlayer: { type: Number, required: true },
     bookingStatus: {

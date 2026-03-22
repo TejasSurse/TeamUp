@@ -17,12 +17,13 @@ const seedDatabase = async () => {
         console.log('Creating Seed Users...');
 
         const salt = await bcrypt.genSalt(10);
+        const adminHashedPassword = await bcrypt.hash('9876543211', salt);
         const hashedPassword = await bcrypt.hash('password123', salt);
 
         const adminUser = await User.create({
             name: 'Super Admin',
-            phone: '9999999999',
-            password: hashedPassword,
+            phone: '9876543211',
+            password: adminHashedPassword,
             role: 'SuperAdmin'
         });
 

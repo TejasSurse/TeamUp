@@ -20,7 +20,7 @@ const OwnerDashboard = () => {
     const [customTo, setCustomTo] = useState('');
     const [editTurf, setEditTurf] = useState(null);
     const [formData, setFormData] = useState({ name: '', description: '', address: '', city: '', pricePerHour: '', sportTypes: '', images: null });
-    const [manualData, setManualData] = useState({ turfId: '', date: '', startTime: '', endTime: '', numberOfPlayers: 2, bookerName: '', paymentAccount: '', customPrice: '' });
+    const [manualData, setManualData] = useState({ turfId: '', date: '', startTime: '', endTime: '', numberOfPlayers: 2, bookerName: '', paymentAccount: '', customPrice: '', advanceAmount: '' });
     const [dailyDate, setDailyDate] = useState(new Date().toISOString().split('T')[0]);
     const [bookedSlotsForDaily, setBookedSlotsForDaily] = useState([]);
     
@@ -30,6 +30,9 @@ const OwnerDashboard = () => {
     const [expenseFormData, setExpenseFormData] = useState({ note: '', amount: '', date: new Date().toISOString().split('T')[0], turfId: '' });
     const [editExpense, setEditExpense] = useState(null);
     const [accountName, setAccountName] = useState('');
+    
+    const [editBooking, setEditBooking] = useState(null);
+    const [bookingFormData, setBookingFormData] = useState({ advanceAmount: '', paymentAccount: '', bookerName: '', bookingStatus: '' });
 
     // Notification Sound
     const audioRef = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'));
@@ -132,6 +135,34 @@ const OwnerDashboard = () => {
         } catch (err) { Swal.fire({ icon: 'error', title: 'Failed', text: err.response?.data?.message || 'Error' }); }
     };
 
+    const startBookingEdit = (b) => {
+        setBookingFormData({
+            advanceAmount: b.advanceAmount || 0,
+            paymentAccount: b.paymentAccount?._id || b.paymentAccount || '',
+            bookerName: b.bookerName || '',
+            bookingStatus: b.bookingStatus || 'Pending'
+        });
+        setEditBooking(b);
+        setActiveTab('bookings');
+    };
+
+    const handleUpdateBooking = async (e) => {
+        e.preventDefault();
+        try {
+            await api.put(`/bookings/${editBooking._id}`, bookingFormData, { headers: { Authorization: `Bearer ${token}` } });
+            Swal.fire({ icon: 'success', title: 'Booking Updated!', timer: 1500, showConfirmButton: false });
+            setEditBooking(null);
+            fetchData();
+        } catch (err) { Swal.fire({ icon: 'error', title: 'Failed to update booking' }); }
+    };
+
+    const handleDeleteBooking = async (id) => {
+        const r = await Swal.fire({ title: 'Delete this booking?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d32f2f', confirmButtonText: 'Delete' });
+        if (!r.isConfirmed) return;
+        try { await api.delete(`/bookings/${id}`, { headers: { Authorization: `Bearer ${token}` } }); fetchData(); }
+        catch (err) { Swal.fire({ icon: 'error', title: 'Failed' }); }
+    };
+
     const handleBlockUser = async (userId, currentlyBlocked) => {
         const action = currentlyBlocked ? 'unblock' : 'block';
         const result = await Swal.fire({
@@ -205,10 +236,11 @@ const OwnerDashboard = () => {
             await api.post('/bookings', {
                 turfId: manualData.turfId, date: manualData.date, startTime: String(s), endTime: String(en),
                 totalPrice: finalPrice, numberOfPlayers: manualData.numberOfPlayers,
-                bookerName: manualData.bookerName, paymentAccount: manualData.paymentAccount
+                bookerName: manualData.bookerName, paymentAccount: manualData.paymentAccount,
+                advanceAmount: Number(manualData.advanceAmount) || 0
             }, { headers: { Authorization: `Bearer ${token}` } });
             Swal.fire({ icon: 'success', title: 'Walk-in Booked!', html: `<p>Total: ₹${finalPrice}</p>`, confirmButtonColor: '#d32f2f' });
-            setManualData({ turfId: '', date: '', startTime: '', endTime: '', numberOfPlayers: 2, customPrice: '', bookerName: '', paymentAccount: '' }); fetchData();
+            setManualData({ turfId: '', date: '', startTime: '', endTime: '', numberOfPlayers: 2, customPrice: '', bookerName: '', paymentAccount: '', advanceAmount: '' }); fetchData();
         } catch (err) { Swal.fire({ icon: 'error', title: 'Failed', text: err.response?.data?.message || 'Slot may be taken.' }); }
     };
 
@@ -389,6 +421,7 @@ const OwnerDashboard = () => {
         { id: 'requests', label: 'Requests', icon: 'fa-solid fa-bell', count: pendingBookings.length },
         { id: 'turfs', label: 'My Turfs', icon: 'fa-solid fa-stadium' },
         { id: 'bookings', label: 'Bookings', icon: 'fa-solid fa-calendar-check' },
+        { id: 'pending', label: 'Pending Dues', icon: 'fa-solid fa-hand-holding-dollar' },
         { id: 'daily', label: 'Daily View', icon: 'fa-solid fa-calendar-day' },
         { id: 'revenue', label: 'Revenue', icon: 'fa-solid fa-indian-rupee-sign' },
         { id: 'manual', label: 'Walk-in', icon: 'fa-solid fa-ticket' },
@@ -424,15 +457,14 @@ const OwnerDashboard = () => {
 
     const generateTimeSlots = () => {
         const slots = [];
-        for (let i = 6; i < 24; i += 0.5) {
+        for (let i = 6; i < 24; i += 1) {
             slots.push(i);
         }
         return slots;
     };
     const formatTime = (val) => {
         const h = Math.floor(val);
-        const m = val % 1 === 0 ? '00' : '30';
-        return `${h}:${m}`;
+        return `${h}:00`;
     };
 
     return (
@@ -788,6 +820,43 @@ const OwnerDashboard = () => {
                                 <h1 className="text-3xl md:text-4xl font-black text-gray-900">Booking Management</h1>
                                 <p className="text-gray-500 mt-2 font-medium">History of all transactions and reservations.</p>
                             </div>
+
+                            {editBooking && (
+                                <div className="bg-white rounded-[2.5rem] shadow-2xl p-10 mb-12 border-2 border-primary/20">
+                                    <h2 className="text-2xl font-black text-gray-900 mb-8"><i className="fa-solid fa-pen-to-square text-primary mr-3"></i>Edit Booking Details</h2>
+                                    <form onSubmit={handleUpdateBooking} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Advance / Paid Amount (₹)</label>
+                                            <input type="number" className="w-full px-6 py-4 bg-gray-50 rounded-2xl font-bold border-2 border-transparent focus:border-primary outline-none" value={bookingFormData.advanceAmount} onChange={e => setBookingFormData({ ...bookingFormData, advanceAmount: Number(e.target.value) })} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Status</label>
+                                            <select className="w-full px-6 py-4 bg-gray-50 rounded-2xl font-bold border-2 border-transparent focus:border-primary outline-none" value={bookingFormData.bookingStatus} onChange={e => setBookingFormData({ ...bookingFormData, bookingStatus: e.target.value })}>
+                                                <option value="Confirmed">Confirmed</option>
+                                                <option value="Pending">Pending</option>
+                                                <option value="Rejected">Rejected</option>
+                                                <option value="Cancelled">Cancelled</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Booker Name</label>
+                                            <input type="text" className="w-full px-6 py-4 bg-gray-50 rounded-2xl font-bold border-2 border-transparent focus:border-primary outline-none" value={bookingFormData.bookerName} onChange={e => setBookingFormData({ ...bookingFormData, bookerName: e.target.value })} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Payment Method</label>
+                                            <select className="w-full px-6 py-4 bg-gray-50 rounded-2xl font-bold border-2 border-transparent focus:border-primary outline-none" value={bookingFormData.paymentAccount} onChange={e => setBookingFormData({ ...bookingFormData, paymentAccount: e.target.value })}>
+                                                <option value="">-- Manual/Cash --</option>
+                                                {accounts.map(a => <option key={a._id} value={a._id}>{a.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="md:col-span-4 flex justify-end gap-3 mt-4">
+                                            <button type="button" onClick={() => setEditBooking(null)} className="px-8 py-4 bg-gray-100 text-gray-500 rounded-2xl font-black">Cancel</button>
+                                            <button type="submit" className="px-8 py-4 bg-primary text-white rounded-2xl font-black shadow-xl">Update Booking</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            )}
+
                             <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100">
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-sm">
@@ -798,6 +867,7 @@ const OwnerDashboard = () => {
                                                 <th className="p-6">Session Details</th>
                                                 <th className="p-6">Transaction</th>
                                                 <th className="p-6">Progress</th>
+                                                <th className="p-6 text-right">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
@@ -816,6 +886,8 @@ const OwnerDashboard = () => {
                                                     </td>
                                                     <td className="p-6">
                                                         <p className="font-black text-gray-900 text-lg">₹{b.totalPrice}</p>
+                                                        {b.advanceAmount > 0 && <p className="text-xs text-green-600 font-bold mb-1">Adv: ₹{b.advanceAmount}</p>}
+                                                        {b.advanceAmount > 0 && b.totalPrice > b.advanceAmount && <p className="text-xs text-rose-500 font-bold mb-1">Due: ₹{b.totalPrice - b.advanceAmount}</p>}
                                                         {b.paymentAccount && <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest bg-gray-100 rounded-lg px-2 py-1 inline-block mt-1"><i className="fa-solid fa-wallet"></i> {b.paymentAccount.name}</p>}
                                                     </td>
                                                     <td className="p-6">
@@ -823,8 +895,60 @@ const OwnerDashboard = () => {
                                                             {b.bookingStatus}
                                                         </span>
                                                     </td>
+                                                    <td className="p-6 flex justify-end gap-2">
+                                                        <button onClick={() => startBookingEdit(b)} className="text-gray-400 hover:text-primary bg-gray-50 hover:bg-rose-50 w-8 h-8 rounded-lg flex items-center justify-center transition-all"><i className="fa-solid fa-pen"></i></button>
+                                                        <button onClick={() => handleDeleteBooking(b._id)} className="text-gray-400 hover:text-rose-500 bg-gray-50 hover:bg-rose-50 w-8 h-8 rounded-lg flex items-center justify-center transition-all"><i className="fa-solid fa-trash-can"></i></button>
+                                                    </td>
                                                 </tr>
                                             ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'pending' && (
+                        <div>
+                            <div className="mb-10">
+                                <h1 className="text-3xl md:text-4xl font-black text-gray-900">Pending Dues & Advances</h1>
+                                <p className="text-gray-500 mt-2 font-medium">Keep track of partially paid bookings.</p>
+                            </div>
+                            <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="text-left text-gray-400 text-[10px] uppercase tracking-widest bg-gray-50/50 border-b">
+                                                <th className="p-6">Client</th>
+                                                <th className="p-6">Venue & Schedule</th>
+                                                <th className="p-6">Total Price</th>
+                                                <th className="p-6">Advance Paid</th>
+                                                <th className="p-6 text-rose-500">Remaining Due</th>
+                                                <th className="p-6 text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {bookings.filter(b => b.totalPrice > (b.advanceAmount || 0) && (b.bookingStatus === 'Confirmed' || b.bookingStatus === 'Walk-in')).map(b => (
+                                                <tr key={b._id} className="hover:bg-rose-50/30 transition-colors">
+                                                    <td className="p-6">
+                                                        <p className="font-black text-gray-900">{b.bookerName || b.user?.name || 'Walk-in'}</p>
+                                                        <p className="text-xs text-gray-500 font-bold">{b.user?.phone}</p>
+                                                    </td>
+                                                    <td className="p-6">
+                                                        <p className="font-bold text-gray-900">{b.turf?.name}</p>
+                                                        <p className="text-[10px] text-primary font-black uppercase tracking-tighter">{b.date} • {formatTime(parseFloat(b.startTime))}–{formatTime(parseFloat(b.endTime))}</p>
+                                                    </td>
+                                                    <td className="p-6 font-black text-gray-900 text-lg">₹{b.totalPrice}</td>
+                                                    <td className="p-6 font-bold text-green-600">₹{b.advanceAmount || 0}</td>
+                                                    <td className="p-6 font-black text-rose-500 text-lg">₹{b.totalPrice - (b.advanceAmount || 0)}</td>
+                                                    <td className="p-6 flex justify-end gap-2">
+                                                        <button onClick={() => startBookingEdit(b)} className="text-white bg-primary hover:bg-primary-dark shadow-lg px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Settle / Edit</button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {bookings.filter(b => b.totalPrice > (b.advanceAmount || 0) && (b.bookingStatus === 'Confirmed' || b.bookingStatus === 'Walk-in')).length === 0 && (
+                                                <tr><td colSpan="6" className="p-10 text-center text-gray-400 font-bold">No pending dues right now.</td></tr>
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
@@ -1071,7 +1195,14 @@ const OwnerDashboard = () => {
                                             </select>
                                         </div>
                                     </div>
-                                    <div className="md:col-span-2 space-y-2">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Advance Amount Paid</label>
+                                        <div className="relative">
+                                            <i className="fa-solid fa-money-bill-wave absolute left-5 top-1/2 -translate-y-1/2 text-gray-300"></i>
+                                            <input type="number" placeholder="Advance Amount" className="w-full pl-14 pr-6 py-5 bg-gray-50 border-2 border-transparent rounded-[2rem] focus:bg-white focus:border-primary outline-none transition-all font-black text-gray-700" value={manualData.advanceAmount || ''} onChange={e => setManualData({ ...manualData, advanceAmount: e.target.value })} />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Custom Dynamic Price (₹) - Overrides Default</label>
                                         <div className="relative">
                                             <i className="fa-solid fa-indian-rupee-sign absolute left-5 top-1/2 -translate-y-1/2 text-primary font-black"></i>
