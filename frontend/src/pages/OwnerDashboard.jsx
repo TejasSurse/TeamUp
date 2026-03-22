@@ -146,6 +146,32 @@ const OwnerDashboard = () => {
         setActiveTab('bookings');
     };
 
+    const handleSettleBalance = async (b) => {
+        const remaining = b.totalPrice - (b.advanceAmount || 0);
+        const r = await Swal.fire({
+            title: 'Settle Balance?',
+            text: `Mark the remaining ₹${remaining} as completely paid?`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#2E7D32',
+            confirmButtonText: 'Yes, Settle'
+        });
+        if (!r.isConfirmed) return;
+        
+        try {
+            await api.put(`/bookings/${b._id}`, {
+                advanceAmount: b.totalPrice,
+                bookingStatus: b.bookingStatus,
+                bookerName: b.bookerName || '',
+                paymentAccount: b.paymentAccount?._id || b.paymentAccount || ''
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            Swal.fire({ icon: 'success', title: 'Settled!', timer: 1500, showConfirmButton: false });
+            fetchData();
+        } catch (err) {
+            Swal.fire({ icon: 'error', title: 'Failed to settle balance' });
+        }
+    };
+
     const handleUpdateBooking = async (e) => {
         e.preventDefault();
         try {
@@ -942,7 +968,8 @@ const OwnerDashboard = () => {
                                                     <td className="p-6 font-bold text-green-600">₹{b.advanceAmount || 0}</td>
                                                     <td className="p-6 font-black text-rose-500 text-lg">₹{b.totalPrice - (b.advanceAmount || 0)}</td>
                                                     <td className="p-6 flex justify-end gap-2">
-                                                        <button onClick={() => startBookingEdit(b)} className="text-white bg-primary hover:bg-primary-dark shadow-lg px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Settle / Edit</button>
+                                                        <button onClick={() => startBookingEdit(b)} className="text-gray-400 hover:text-primary bg-gray-50 hover:bg-rose-50 w-8 h-8 rounded-lg flex items-center justify-center transition-all" title="Edit Manually"><i className="fa-solid fa-pen"></i></button>
+                                                        <button onClick={() => handleSettleBalance(b)} className="text-white bg-green-500 hover:bg-green-600 shadow-lg px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Settle Now</button>
                                                     </td>
                                                 </tr>
                                             ))}
